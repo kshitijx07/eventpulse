@@ -10,14 +10,17 @@ const navLinks = [
 
 export default function Navbar() {
   const location = useLocation()
-  const { user, logout } = useAuth()
+  const auth = useAuth() || {}
+  const user = auth.user
+  const logout = auth.logout
 
   return (
     <nav className="bg-white shadow-sm border-b border-gray-200">
       <div className="max-w-7xl mx-auto px-4">
         <div className="flex items-center justify-between h-16">
-          <Link to="/" className="text-xl font-bold text-indigo-600">
-            🎪 EventPulse
+          <Link to="/" className="text-xl font-bold text-indigo-600 flex items-center gap-2">
+            <span>🎪</span>
+            <span>EventPulse</span>
           </Link>
           <div className="flex items-center space-x-1">
             {navLinks.map(link => (
@@ -35,10 +38,12 @@ export default function Navbar() {
             ))}
             {user && (
               <div className="flex items-center ml-3 pl-3 border-l border-gray-200">
-                <span className="text-sm text-gray-500 mr-2">👤 {user.name}</span>
+                <span className="text-sm font-medium text-gray-700 mr-3">
+                  👤 {user.name || user.email}
+                </span>
                 <button
                   onClick={logout}
-                  className="px-3 py-1.5 text-sm text-red-500 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors"
+                  className="px-3 py-1.5 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors border border-red-200"
                 >
                   Logout
                 </button>
@@ -50,4 +55,3 @@ export default function Navbar() {
     </nav>
   )
 }
-
