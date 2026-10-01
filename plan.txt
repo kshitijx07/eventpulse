@@ -1,0 +1,1038 @@
+You have 1h 50m (2:55–4:45 PM), so architecture and scope discipline matter more than adding 20 features.
+1. What the interviewer is actually asking you to build
+At the core, this is an Event Discovery + RSVP + Friend Referral Tracking platform.
+The primary flow should be:
+User opens application
+        ↓
+Event Feed
+        ↓
+Events fetched from Ticketmaster
+        ↓
+Calendar / Event Cards
+        ↓
+User selects event
+        ↓
+RSVP / Interested
+        ↓
+RSVP stored in MongoDB
+        ↓
+User can generate Share Link
+        ↓
+Friend opens Share Link
+        ↓
+Backend records click
+        ↓
+Friends Attending count increases
+        ↓
+Event Card displays:
+"3 Friends Attending"
+
+And alongside that:
+User
+ ├── Browse Events
+ ├── Calendar
+ ├── Event Details
+ ├── RSVP
+ ├── My RSVPs
+ ├── Share Event
+ └── Reminder Settings
+
+The chat interface is part of the mission statement, so I would implement a small but functional event assistant, rather than attempting a complicated AI agent.
+For example:
+User: "Show me concerts this weekend"
+
+Backend interprets the request and returns matching events.
+But do not let the chat feature consume your core implementation time. The Ticketmaster → MongoDB → RSVP → referral flow is much more important.
+2. Recommended architecture
+For this assessment, I'd use:
+                 ┌──────────────────────┐
+                 │      React + Vite    │
+                 │                      │
+                 │ Calendar             │
+                 │ Event Cards          │
+                 │ RSVP Dashboard       │
+                 │ Chat Interface       │
+                 │ Event Details        │
+                 └──────────┬───────────┘
+                            │ REST API
+                            ↓
+                 ┌──────────────────────┐
+                 │   Node.js + Express  │
+                 │                      │
+                 │ Event Service        │
+                 │ RSVP Service         │
+                 │ Referral Service     │
+                 │ User Service         │
+                 │ Reminder Service     │
+                 │ Chat Service         │
+                 └───────┬───────┬──────┘
+                         │       │
+              ┌──────────┘       └────────────┐
+              ↓                               ↓
+       ┌─────────────┐                 ┌──────────────┐
+       │   MongoDB   │                 │ Ticketmaster │
+       │             │                 │     API      │
+       │ Users       │                 └──────────────┘
+       │ RSVPs       │
+       │ Referrals   │
+       │ Reminders   │
+       └─────────────┘
+
+Stack
+Frontend
+- React
+- Vite
+- Tailwind CSS
+- React Router
+- Axios
+- date-fns / calendar library if useful
+Backend
+- Node.js
+- Express
+- MongoDB
+- Mongoose
+- Axios
+Optional
+- Zod/Joi for validation
+- UUID/nanoid for referral codes
+Don't introduce:
+- Microservices
+- Redis
+- Kafka
+- Kubernetes
+- complicated authentication
+- complicated AI infrastructure
+This is an assessment, not a 6-month startup.
+3. Data model
+Keep the MongoDB design simple.
+User
+{
+  _id,
+  name,
+  email,
+  reminderSettings: {
+    enabled: true,
+    reminderTime: "1 day"
+  },
+  createdAt
+}
+
+RSVP
+{
+  _id,
+  userId,
+  eventId,
+  eventName,
+  eventDate,
+  eventVenue,
+  status: "interested",
+  createdAt
+}
+
+Why store event information?
+Because Ticketmaster data can change/disappear, while your RSVP should remain meaningful.
+Referral / Share Link
+{
+  _id,
+  eventId,
+  creatorUserId,
+  code,
+  clicks: 0,
+  uniqueVisitors: [],
+  createdAt
+}
+
+Potentially:
+/share/abc123
+
+When somebody opens it:
+GET /api/referrals/abc123
+        ↓
+increment click count
+        ↓
+return event
+
+Then:
+Friends Attending = referral.clicks
+
+But there's an important distinction.
+The statement says:
+"track how many users clicked that link and display a Friends Attending count"
+
+So for the assessment, I'd make the UI explicitly call it:
+Friends Attending: 3
+while internally tracking referral clicks.
+If you want the semantics to be more correct, make:
+referral click
+       ↓
+friend opens shared event
+       ↓
+friend RSVP
+       ↓
+Friends Attending increases
+
+However, this adds complexity.
+For a 110-minute assessment, implement:
+Share Link → tracked click → Friends Attending count
+
+and explain in the viva that the referral model can later be upgraded to count only authenticated friend RSVPs.
+4. API design
+This is where you demonstrate that you understand backend architecture.
+Events
+GET /api/events
+GET /api/events/:id
+
+Backend calls Ticketmaster.
+Potential query:
+GET /api/events?city=Pune&startDate=...&endDate=...
+
+The frontend should not directly call Ticketmaster.
+That's important because the problem explicitly says:
+Business logic should be implemented server-side.
+
+So:
+React
+  ↓
+GET /api/events
+  ↓
+Express
+  ↓
+Ticketmaster API
+  ↓
+Normalize response
+  ↓
+React
+
+RSVP
+POST /api/rsvps
+GET  /api/rsvps/:userId
+DELETE /api/rsvps/:eventId
+
+Share link
+POST /api/events/:eventId/share
+
+Response:
+{
+  "shareUrl": "/share/abc123"
+}
+
+Referral tracking
+GET /api/share/:code
+
+Backend:
+find referral
+increment clicks
+return event
+
+User
+For the assessment, don't waste time implementing OAuth.
+Use a seeded/demo user:
+userId = demo-user-1
+
+You can have a small profile endpoint:
+GET /api/users/me
+PATCH /api/users/me
+
+Reminder
+GET /api/users/me/reminders
+PATCH /api/users/me/reminders
+
+This satisfies the persistence requirement without building an actual notification infrastructure.
+5. Frontend structure
+I'd make the application look roughly like:
+┌──────────────────────────────────────────────────────────┐
+│ Eventify        Discover  Calendar  My Events      👤    │
+├──────────────────────────────────────────────────────────┤
+│                                                          │
+│        Discover Events                                   │
+│        Find something worth attending                    │
+│                                                          │
+│  🔎 Search events...              📍 Pune                │
+│                                                          │
+├──────────────────────────────────────────────────────────┤
+│                                                          │
+│  Calendar                                                 │
+│  ┌────┬────┬────┬────┬────┬────┬────┐                  │
+│  │ Mon│ Tue│ Wed│ Thu│ Fri│ Sat│ Sun│                  │
+│  └────┴────┴────┴────┴────┴────┴────┘                  │
+│                                                          │
+├──────────────────────────────────────────────────────────┤
+│ Upcoming Events                                           │
+│                                                          │
+│ ┌─────────────────┐  ┌─────────────────┐                │
+│ │ Event image     │  │ Event image     │                │
+│ │                 │  │                 │                │
+│ │ Coldplay        │  │ Tech Conference │                │
+│ │ 📍 Pune         │  │ 📍 Mumbai       │                │
+│ │ Oct 12 • 7 PM   │  │ Oct 14 • 10 AM  │                │
+│ │                 │  │                 │                │
+│ │ ❤️ Interested   │  │ ❤️ Interested   │                │
+│ │ 👥 3 Friends    │  │ 👥 1 Friend     │                │
+│ └─────────────────┘  └─────────────────┘                │
+└──────────────────────────────────────────────────────────┘
+
+Then:
+My Events
+My RSVPs
+
+┌─────────────────────────────────────┐
+│ Event Name                          │
+│ Date • Venue                        │
+│                                     │
+│ ✓ Interested                       │
+│                                     │
+│ [Share with Friends]                │
+│                                     │
+│ 👥 4 Friends Attending              │
+└─────────────────────────────────────┘
+
+6. Chat interface
+Don't build a fake chat box that doesn't do anything.
+Build something small:
+┌───────────────────────────────────┐
+│ Event Assistant                   │
+├───────────────────────────────────┤
+│                                   │
+│ You:                              │
+│ Show me events in Pune this week  │
+│                                   │
+│ Assistant:                        │
+│ I found 8 events in Pune...       │
+│                                   │
+│ [View Events]                     │
+│                                   │
+├───────────────────────────────────┤
+│ Ask about events...        [Send] │
+└───────────────────────────────────┘
+
+Backend can initially support deterministic intents:
+"events in Pune"
+"events this weekend"
+"concerts"
+"my events"
+
+You don't need an LLM unless the assessment specifically requires it.
+If you have extra time, then add an LLM layer.
+7. Your 110-minute execution plan
+This is the most important part.
+Phase 0 — 2:55–3:00
+Understand + initialize
+Do not code immediately.
+Spend 5 minutes identifying:
+Must Have
+─────────
+✓ Ticketmaster events
+✓ Calendar
+✓ Event cards
+✓ RSVP
+✓ MongoDB persistence
+✓ RSVP dashboard
+✓ Share link
+✓ Referral click tracking
+✓ Friends Attending
+✓ Basic chat interface
+✓ Clean architecture
+✓ Git commits
+
+Then initialize repository.
+Phase 1 — 3:00–3:15
+Backend foundation
+Build:
+backend/
+├── src/
+│   ├── controllers/
+│   ├── routes/
+│   ├── services/
+│   ├── models/
+│   ├── middleware/
+│   ├── config/
+│   └── app.js
+├── .env
+└── package.json
+
+Get:
+Express running
+MongoDB connected
+Health endpoint working
+
+First commit:
+chore: initialize backend architecture
+
+Phase 2 — 3:15–3:30
+Ticketmaster integration
+Implement:
+GET /api/events
+
+Backend talks to Ticketmaster.
+Normalize Ticketmaster's response into your own format:
+{
+  "id": "...",
+  "title": "...",
+  "venue": "...",
+  "date": "...",
+  "time": "...",
+  "image": "...",
+  "url": "..."
+}
+
+This is important.
+Don't leak the Ticketmaster response structure into React.
+Commit:
+feat: integrate ticketmaster event feed
+
+Phase 3 — 3:30–3:45
+RSVP + MongoDB
+Implement:
+POST /api/rsvps
+GET /api/rsvps
+DELETE /api/rsvps/:eventId
+
+Test using Postman/curl/browser.
+Commit:
+feat: implement event RSVP persistence
+
+Phase 4 — 3:45–4:00
+Referral system
+This is your Vibe Check differentiator.
+Implement:
+POST /api/events/:eventId/share
+GET /api/share/:code
+
+Flow:
+RSVP
+ ↓
+Generate Share Link
+ ↓
+Friend opens link
+ ↓
+Backend increments click count
+ ↓
+Event page displays
+"Friends Attending: N"
+
+Commit:
+feat: add friend referral tracking
+
+Phase 5 — 4:00–4:25
+Frontend
+Build:
+Navbar
+Event Feed
+Event Card
+Calendar
+RSVP button
+Friends count
+My RSVPs
+Share button
+
+Do not spend 20 minutes making animations.
+Functional > beautiful.
+Commit:
+feat: build event discovery and RSVP UI
+
+Phase 6 — 4:25–4:35
+Chat + reminders
+Implement the simplest useful version.
+Chat:
+POST /api/chat
+
+Basic event-related query processing.
+Reminder settings:
+PATCH /api/users/me/reminders
+
+Commit:
+feat: add event assistant and reminder settings
+
+Phase 7 — 4:35–4:42
+Testing + polish
+Test the complete user journey:
+Open app
+ ↓
+Events appear
+ ↓
+Calendar works
+ ↓
+Click event
+ ↓
+RSVP
+ ↓
+My Events updates
+ ↓
+Generate share link
+ ↓
+Open share link
+ ↓
+Click count increases
+ ↓
+Friends count changes
+
+Also test:
+Ticketmaster API failure
+MongoDB failure
+Empty event result
+Duplicate RSVP
+Invalid referral
+
+Fix the most visible bugs.
+Phase 8 — 4:42–4:45
+GitHub submission
+Check:
+git status
+git log --oneline
+
+Push.
+Then verify:
+✓ Repository public
+✓ README exists
+✓ .env NOT committed
+✓ .env.example exists
+✓ No API keys exposed
+✓ Application runs
+✓ GitHub has meaningful commits
+
+Submit the repository.
+Do not make another code change after 4:45.
+8. Most important architectural decision
+Tell your AI builder this:
+Build vertically, not horizontally.
+
+Meaning don't spend 40 minutes creating every backend model first.
+Instead:
+Events
+ ↓
+Backend API
+ ↓
+Frontend Event Card
+ ↓
+RSVP
+ ↓
+MongoDB
+ ↓
+Share Link
+ ↓
+Referral tracking
+ ↓
+UI count
+
+You want a working end-to-end slice as early as possible.
+That protects you if time runs out.
+9. The master prompt I'd give your AI coding agent
+This is the prompt I recommend copying almost exactly.
+You are my senior full-stack engineer and implementation partner for a time-boxed coding assessment.
+We need to build a clean, working MVP for the following problem:
+PRODUCT
+Build an intelligent event discovery and tracking platform with real-time-oriented interaction.
+Core requirements:
+1. Event Calendar
+   - Calendar/grid showing dates with local events.
+   - Users can identify dates containing events.
+   - Selecting a date should allow the user to view relevant events.
+2. Event Feed
+   - Fetch events from the Ticketmaster API.
+   - Ticketmaster must be called from the backend, NOT directly from the frontend.
+   - Backend should normalize Ticketmaster responses into a clean internal event representation before returning them to the frontend.
+3. Event Cards
+   Each card should show:
+   - Event title
+   - Venue
+   - Date
+   - Time
+   - Image when available
+   - Interested/RSVP state
+   - Friends Attending count
+   - Share action
+4. RSVP
+   - User can mark an event as Interested/RSVP.
+   - RSVP must persist in MongoDB.
+   - User should have a dedicated My Events / RSVP Dashboard showing their confirmed/interested events.
+   - Duplicate RSVPs should be prevented.
+   - RSVP and all business rules must be handled by the backend.
+5. User Profile
+   - Persist basic user profile information in MongoDB.
+   - For the assessment, do NOT spend significant time implementing OAuth or production authentication.
+   - Use a deterministic demo user/session if necessary, but structure the code so real authentication can be added later.
+6. Reminder Settings
+   - Persist user reminder preferences/settings in MongoDB.
+   - A full notification infrastructure is NOT required unless time permits.
+   - Implement the persistence/API/UI needed to demonstrate that reminder settings are stored.
+7. Friend Invite / Share Link — IMPORTANT VIBE CHECK FEATURE
+   If a user has RSVP'd to an event, they can generate a share link.
+   Example:
+   /share/abc123
+   Requirements:
+   - Backend generates a unique referral/share code.
+   - Share link maps to the event and the user who created it.
+   - When another user opens the share link, the backend records the referral/click.
+   - Backend tracks the number of users/clicks associated with the referral.
+   - Event cards should display a "Friends Attending" count based on the tracked referral mechanism.
+   - Invalid share codes must return a proper error.
+   - Do not implement this purely in frontend state.
+8. Intelligent Chat Interface
+   - Include a small functional event assistant/chat interface.
+   - It should allow users to ask simple event-related questions such as:
+     "Show me events in Pune"
+     "Show me events this weekend"
+     "Show me concerts"
+     "Show my events"
+   - The chat should use backend APIs/data rather than being a fake UI.
+   - Do NOT spend excessive time implementing a complicated LLM/agent architecture.
+   - A deterministic intent-based implementation is acceptable for the MVP.
+   - If the core system is complete and stable, the chat can be enhanced with an LLM as a secondary improvement.
+TECHNOLOGY
+Use a pragmatic MERN-style architecture:
+Frontend:
+- React
+- Vite
+- Tailwind CSS
+- React Router
+- Axios
+- date-fns or a lightweight calendar solution if useful
+Backend:
+- Node.js
+- Express
+- MongoDB
+- Mongoose
+- Axios
+Use JavaScript unless there is a compelling reason to use TypeScript.
+Do NOT introduce unnecessary complexity such as:
+- Microservices
+- Kubernetes
+- Redis
+- Kafka
+- complex authentication
+- event-driven infrastructure
+- unnecessary state-management frameworks
+- complicated AI agent frameworks
+This is a time-boxed assessment. Prefer a complete, reliable MVP over excessive architecture.
+ARCHITECTURE
+Use clear separation of concerns.
+Backend structure should approximately follow:
+backend/
+src/
+config/
+controllers/
+routes/
+services/
+models/
+middleware/
+utils/
+app.js
+server.js
+Frontend should approximately follow:
+frontend/
+src/
+components/
+pages/
+services/
+hooks/
+utils/
+context/
+App.jsx
+main.jsx
+Keep:
+- API communication in frontend service modules
+- Business logic in backend services/controllers
+- Database operations in models/services
+- UI components focused on presentation and interaction
+The frontend must NOT contain business calculations that belong on the server.
+DATA MODELS
+Design sensible MongoDB models.
+User:
+{
+name,
+email,
+reminderSettings,
+createdAt
+}
+RSVP:
+{
+userId,
+eventId,
+eventName,
+eventDate,
+eventVenue,
+status,
+createdAt
+}
+Referral/ShareLink:
+{
+eventId,
+creatorUserId,
+code,
+clicks,
+uniqueVisitors,
+createdAt
+}
+You may modify the exact schema if there is a better implementation, but keep it simple and explain why.
+API DESIGN
+Implement approximately:
+Events:
+GET /api/events
+GET /api/events/
+RSVP:
+POST /api/rsvps
+GET /api/rsvps
+DELETE /api/rsvps/
+Share/referral:
+POST /api/events//share
+GET /api/share/
+User:
+GET /api/users/me
+PATCH /api/users/me
+Reminder settings:
+GET /api/users/me/reminders
+PATCH /api/users/me/reminders
+Chat:
+POST /api/chat
+Health:
+GET /api/health
+You may modify endpoint names if there is a cleaner REST design.
+EVENT DATA FLOW
+The correct flow should be:
+React
+↓
+GET /api/events
+↓
+Express controller
+↓
+Event service
+↓
+Ticketmaster API
+↓
+Normalize response
+↓
+Return application-specific event DTO
+↓
+React event cards
+Never expose the Ticketmaster API key to the browser.
+Use environment variables:
+TICKETMASTER_API_KEY=
+MONGODB_URI=
+PORT=
+Create .env.example.
+Never commit .env or credentials.
+RSVP FLOW
+Expected flow:
+User clicks Interested
+↓
+POST /api/rsvps
+↓
+Backend validates event/user
+↓
+Check duplicate RSVP
+↓
+Persist RSVP in MongoDB
+↓
+Return updated RSVP state
+↓
+Frontend updates UI
+The frontend must not simply toggle a local boolean and pretend persistence happened.
+FRIEND INVITE FLOW
+Expected flow:
+User RSVP's
+↓
+User clicks Share
+↓
+POST /api/events//share
+↓
+Backend creates/retrieves referral code
+↓
+Frontend receives share URL
+↓
+User shares URL
+↓
+Friend opens /share/
+↓
+Backend resolves referral
+↓
+Backend records click
+↓
+Backend returns event/referral information
+↓
+Frontend displays Friends Attending count
+Use a server-generated unique referral code.
+Do not use predictable event IDs as referral codes.
+Prevent obviously incorrect behavior such as counting the same visitor repeatedly if practical within the available time. A simple visitor/session identifier or uniqueVisitors mechanism is sufficient for the MVP.
+FRONTEND UX
+Build a polished but achievable interface.
+Suggested pages:
+/
+Event discovery dashboard
+/events/
+Event details
+/calendar
+Calendar view
+/my-events
+RSVP dashboard
+/share/
+Shared event/referral page
+/profile
+Profile + reminder settings
+The navigation should make these areas easy to access.
+Event cards should be visually clear and show:
+Title
+Venue
+Date
+Time
+Interested state
+Friends Attending
+Share
+Use loading, empty and error states.
+Examples:
+Loading:
+"Finding events..."
+Empty:
+"No events found for this date."
+API failure:
+"Unable to load events. Please try again."
+CALENDAR
+The calendar does not need to be a sophisticated scheduling application.
+It needs to:
+- Show the current month.
+- Highlight dates that have events.
+- Allow selecting a date.
+- Show events for the selected date.
+Prefer a lightweight implementation rather than spending excessive time on calendar styling.
+CHAT
+Implement a minimal real backend-backed assistant.
+Example:
+POST /api/chat
+Request:
+{
+"message": "show me concerts this weekend"
+}
+Backend should extract basic intent/filter parameters and query the event service.
+Return structured data such as:
+{
+"message": "I found 5 events matching your request.",
+"events": [...]
+}
+The frontend should render the response and event cards/results.
+Do NOT fabricate event information.
+ERROR HANDLING
+Implement consistent API error responses.
+Example:
+{
+"success": false,
+"message": "Event not found"
+}
+Use appropriate HTTP status codes.
+Handle:
+- Ticketmaster API errors
+- MongoDB errors
+- invalid RSVP
+- duplicate RSVP
+- invalid referral code
+- missing required fields
+- empty event results
+IMPORTANT TIME-CONSTRAINED DEVELOPMENT STRATEGY
+This assessment has approximately 110 minutes.
+Therefore implement in this exact priority order:
+PHASE 1 — Project foundation
+- Repository structure
+- Backend
+- Frontend
+- MongoDB connection
+- Environment configuration
+- Health endpoint
+PHASE 2 — Event discovery
+- Ticketmaster integration
+- Event normalization
+- GET /api/events
+- Frontend event feed
+PHASE 3 — RSVP
+- RSVP model
+- RSVP APIs
+- Event card Interested action
+- My Events dashboard
+PHASE 4 — Friend Invite
+- Referral model
+- Share link generation
+- Share link resolution
+- Click tracking
+- Friends Attending display
+PHASE 5 — Calendar
+- Monthly calendar
+- Event dates
+- Date filtering
+PHASE 6 — Profile/reminders
+- Profile
+- Reminder persistence
+PHASE 7 — Chat
+- Minimal backend-backed event assistant
+PHASE 8 — Polish/testing
+- Loading states
+- Error states
+- Responsive UI
+- Empty states
+- README
+- Environment documentation
+- Final testing
+NEVER sacrifice the core Event → RSVP → Share → Referral flow just to make the chat feature more sophisticated.
+GIT COMMITS
+Make meaningful incremental commits.
+Suggested commits:
+chore: initialize full-stack project
+feat: add mongodb and backend foundation
+feat: integrate ticketmaster event feed
+feat: add event discovery interface
+feat: implement RSVP persistence
+feat: add RSVP dashboard
+feat: implement friend referral sharing
+feat: track referral clicks and friends attending
+feat: add event calendar
+feat: add profile and reminder settings
+feat: add event assistant
+fix: handle event and referral edge cases
+docs: add setup and architecture documentation
+Do not squash everything into one commit.
+TESTING STRATEGY
+After each major backend feature, test its API before moving on.
+Minimum end-to-end scenario:
+1. Start backend.
+2. Connect MongoDB.
+3. Fetch Ticketmaster events.
+4. Display events in frontend.
+5. RSVP to an event.
+6. Confirm RSVP exists in MongoDB.
+7. Refresh browser.
+8. Confirm RSVP state persists.
+9. Open My Events.
+10. Generate Share Link.
+11. Open Share Link in another browser/incognito context if possible.
+12. Confirm referral click is recorded.
+13. Confirm Friends Attending changes.
+14. Test invalid referral.
+15. Test duplicate RSVP.
+16. Test Ticketmaster failure/empty response.
+CODE QUALITY RULES
+Write clean, readable production-style code.
+Prefer:
+- small functions
+- meaningful names
+- reusable components
+- service/controller separation
+- centralized error handling
+- environment variables
+- API validation
+- consistent response formats
+Avoid:
+- giant files
+- duplicated API logic
+- hardcoded API keys
+- hardcoded fake event data in production flow
+- frontend-only business logic
+- unnecessary abstractions
+- TODO placeholders for required functionality
+IMPORTANT WORKING STYLE
+Do not blindly generate the entire project at once.
+Work incrementally.
+For each phase:
+1. Inspect the existing repository.
+2. Decide the smallest implementation required.
+3. Implement it.
+4. Run/build/test it.
+5. Fix errors.
+6. Only then move to the next phase.
+Before making major architectural changes, inspect the current implementation so existing working functionality is not unnecessarily broken.
+When something fails:
+- identify the root cause,
+- fix the smallest relevant part,
+- rerun the affected flow,
+- do not randomly rewrite unrelated files.
+REVIEW CHECKPOINTS
+After completing each phase, briefly verify:
+- What functionality now works?
+- What API endpoint was added?
+- What data is persisted?
+- What remains?
+- Is there any known bug that must be fixed before continuing?
+Before finalizing, perform a full architecture and implementation review.
+Check specifically:
+1. Does the frontend actually communicate with the backend?
+2. Does the backend actually communicate with Ticketmaster?
+3. Is the API key protected?
+4. Does MongoDB actually persist RSVP data?
+5. Does refresh preserve RSVP state?
+6. Does Share Link generation work?
+7. Does opening a Share Link update referral tracking?
+8. Does Friends Attending display backend-derived data?
+9. Does calendar filtering work?
+10. Does the chat use real backend data?
+11. Are loading/error/empty states present?
+12. Is the repository easy for an interviewer to understand?
+13. Does README contain setup instructions?
+14. Is .env excluded from Git?
+15. Are there meaningful incremental Git commits?
+README
+Create a concise README containing:
+- Project overview
+- Architecture
+- Tech stack
+- Features
+- Folder structure
+- Environment variables
+- Local setup
+- MongoDB setup
+- Ticketmaster API setup
+- API endpoint summary
+- RSVP flow
+- Friend referral flow
+- Chat flow
+- Design/architecture decisions
+- Known limitations
+- Future improvements
+FINAL PRINCIPLE
+The finished application must be demonstrably functional.
+The interviewer should be able to clone the repository, configure environment variables, start the backend and frontend, and understand the architecture quickly.
+Prioritize:
+FUNCTIONALITY
+RELIABLE END-TO-END FLOWS
+CLEAN ARCHITECTURE
+GOOD UX
+EXTRA FEATURES
+
+Do not over-engineer.
+If time becomes limited, stop adding features and make sure these four flows work perfectly:
+1. Ticketmaster → Event Feed
+2. Event → RSVP → MongoDB
+3. RSVP → Share Link → Referral Tracking → Friends Attending
+4. Event Calendar → Date → Events
+Start by inspecting the current repository and then implement PHASE 1 only. Do not jump ahead until the foundation is working.
+
+
+
+10. One thing I'd change from the raw prompt
+The biggest trap is telling the AI:
+"Build the entire application."
+
+That often produces 500 lines of generated code, followed by 14 broken dependencies and an API that was never tested.
+Instead, the master prompt explicitly says:
+Start with Phase 1 only.
+
+Then you let the coding agent work sequentially.
+After it finishes Phase 1, your next instruction can simply be:
+"Review Phase 1, test the existing application, fix any issues you find, then proceed to Phase 2. Do not modify working functionality unnecessarily."
+
+Then:
+"Phase 2 is complete. Review the Ticketmaster integration end-to-end and proceed to Phase 3 RSVP persistence."
+
+That gives you a controlled build rather than letting the AI run wild.
+Your actual priority during the assessment
+If you suddenly have 20 minutes left, forget fancy UI and AI.
+Make absolutely sure this works:
+Ticketmaster
+     ↓
+Event Card
+     ↓
+Interested
+     ↓
+MongoDB
+     ↓
+Share Link
+     ↓
+Friend opens link
+     ↓
+Referral tracked
+     ↓
+Friends Attending: 1
