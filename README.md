@@ -23,15 +23,27 @@ Backend (Node.js + Express)
 
 ## Features
 
-1. **Event Discovery** — Search events by keyword and city via Ticketmaster
-2. **Event Cards** — Title, venue, date, time, image, Interested button, Friends Attending, Share
-3. **RSVP System** — Backend-persisted RSVP with duplicate prevention
-4. **RSVP Dashboard** — Dedicated page showing user's interested events
-5. **Friend Invite (Vibe Check)** — Share link generation → click tracking → Friends Attending count
-6. **Event Calendar** — Monthly grid with event date highlights and date-based filtering
-7. **User Profile** — Editable name/email persisted in MongoDB
-8. **Reminder Settings** — Toggle and time selection persisted in MongoDB
-9. **Chat Assistant** — Deterministic intent-based event assistant using real backend data
+1. **User Authentication** — Register and login with secure bcrypt password hashing and session management
+2. **Event Discovery** — Search events by keyword and city via Ticketmaster
+3. **Event Cards** — Title, venue, date, time, image, Interested button, Friends Attending, Share
+4. **RSVP System** — Backend-persisted RSVP with duplicate prevention
+5. **RSVP Dashboard** — Dedicated page showing user's interested events
+6. **Friend Invite (Vibe Check)** — Share link generation → click tracking → Friends Attending count
+7. **Event Calendar** — Monthly grid with event date highlights and date-based filtering
+8. **User Profile** — Editable name/email persisted in MongoDB
+9. **Reminder Settings** — Toggle and time selection persisted in MongoDB
+10. **Chat Assistant** — Deterministic intent-based event assistant using real backend data
+
+## ⚡ Demo Credentials
+
+For quick evaluation and testing without registering, use:
+
+- **Email**: `demo@eventpulse.com`
+- **Password**: `password123` *(or any password!)*
+- **Or**: Simply click the **"⚡ 1-Click Sign In as Demo User"** button directly on the login screen.
+
+You can also click **"Don't have an account? Register"** to create a custom user account with your own credentials.
+
 
 ## Folder Structure
 
@@ -99,6 +111,8 @@ App starts on http://localhost:5173
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/health` | Health check |
+| POST | `/api/auth/register` | Register new user account |
+| POST | `/api/auth/login` | Login and authenticate user |
 | GET | `/api/events` | Fetch events (query: keyword, city, startDateTime, endDateTime) |
 | GET | `/api/events/:id` | Single event details |
 | POST | `/api/rsvps` | Create RSVP |
