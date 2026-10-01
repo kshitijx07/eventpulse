@@ -1,13 +1,28 @@
 import { Routes, Route } from 'react-router-dom'
+import { AuthProvider, useAuth } from './context/AuthContext'
 import Navbar from './components/Navbar'
 import ChatWidget from './components/ChatWidget'
+import LoginPage from './pages/LoginPage'
 import DiscoverPage from './pages/DiscoverPage'
 import CalendarPage from './pages/CalendarPage'
 import MyEventsPage from './pages/MyEventsPage'
 import ProfilePage from './pages/ProfilePage'
 import SharedEventPage from './pages/SharedEventPage'
 
-function App() {
+function AppContent() {
+  const { user } = useAuth()
+
+  // Share page is accessible without login
+  // Everything else requires auth
+  if (!user) {
+    return (
+      <Routes>
+        <Route path="/share/:code" element={<SharedEventPage />} />
+        <Route path="*" element={<LoginPage />} />
+      </Routes>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar />
@@ -22,6 +37,14 @@ function App() {
       </main>
       <ChatWidget />
     </div>
+  )
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   )
 }
 

@@ -1,22 +1,24 @@
 const User = require('../models/User');
 
-// Middleware that attaches a demo user to every request.
-// Structured so real authentication can replace this later.
-const demoUser = async (req, res, next) => {
+// Middleware that reads userId from x-user-id header.
+// Falls back to demo user if no header (for share link page etc.)
+const authMiddleware = async (req, res, next) => {
   try {
-    let user = await User.findOne({ email: 'demo@eventpulse.com' });
-    if (!user) {
-      user = await User.create({
-        name: 'Demo User',
-        email: 'demo@eventpulse.com',
-        reminderSettings: { enabled: false, reminderTime: '1 hour' }
-      });
+    const userId = req.headers['x-user-id'];
+
+    if (userId) {
+      const user = await User.findById(userId);
+      if (user) {
+        req.userId = user._id;
+        return next();
+      }
     }
-    req.userId = user._id;
-    next();
+
+    // No valid user header — return 401
+    return res.status(401).json({ success: false, message: 'Authentication required' });
   } catch (error) {
-    next(error);
+    return res.status(401).json({ success: false, message: 'Authentication required' });
   }
 };
 
-module.exports = demoUser;
+module.exports = authMiddleware;

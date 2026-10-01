@@ -1,4 +1,5 @@
 import { Link, useLocation } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
 
 const navLinks = [
   { to: '/', label: 'Discover' },
@@ -9,6 +10,7 @@ const navLinks = [
 
 export default function Navbar() {
   const location = useLocation()
+  const { user, logout } = useAuth()
 
   return (
     <nav className="bg-white shadow-sm border-b border-gray-200">
@@ -17,7 +19,7 @@ export default function Navbar() {
           <Link to="/" className="text-xl font-bold text-indigo-600">
             🎪 EventPulse
           </Link>
-          <div className="flex space-x-1">
+          <div className="flex items-center space-x-1">
             {navLinks.map(link => (
               <Link
                 key={link.to}
@@ -31,6 +33,17 @@ export default function Navbar() {
                 {link.label}
               </Link>
             ))}
+            {user && (
+              <div className="flex items-center ml-3 pl-3 border-l border-gray-200">
+                <span className="text-sm text-gray-500 mr-2">👤 {user.name}</span>
+                <button
+                  onClick={logout}
+                  className="px-3 py-1.5 text-sm text-red-500 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors"
+                >
+                  Logout
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
