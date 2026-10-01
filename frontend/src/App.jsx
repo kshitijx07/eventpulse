@@ -1,5 +1,6 @@
 import { Routes, Route } from 'react-router-dom'
 import Navbar from './components/Navbar'
+import ChatWidget from './components/ChatWidget'
 import DiscoverPage from './pages/DiscoverPage'
 import CalendarPage from './pages/CalendarPage'
 import MyEventsPage from './pages/MyEventsPage'
@@ -19,6 +20,7 @@ function App() {
           <Route path="/share/:code" element={<SharedEventPage />} />
         </Routes>
       </main>
+      <ChatWidget />
     </div>
   )
 }
