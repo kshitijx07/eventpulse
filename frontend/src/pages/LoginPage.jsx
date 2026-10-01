@@ -26,12 +26,19 @@ export default function LoginPage() {
         const res = await api.post('/auth/register', { name, email, password })
         login(res.data.data)
       } else {
-        if (!email || !password) {
-          setError('Email and password are required')
+        if (!email) {
+          setError('Email is required')
           setLoading(false)
           return
         }
-        const res = await api.post('/auth/login', { email, password })
+        // If demo email, supply default password if empty
+        const pass = password || (email === 'demo@eventpulse.com' ? 'password123' : '')
+        if (!pass) {
+          setError('Password is required')
+          setLoading(false)
+          return
+        }
+        const res = await api.post('/auth/login', { email, password: pass })
         login(res.data.data)
       }
     } catch (err) {
@@ -40,16 +47,32 @@ export default function LoginPage() {
     setLoading(false)
   }
 
+  const handleDemoSignIn = async () => {
+    setError('')
+    setLoading(true)
+    try {
+      const res = await api.post('/auth/login', {
+        email: 'demo@eventpulse.com',
+        password: 'password123'
+      })
+      login(res.data.data)
+    } catch (err) {
+      setError(err.response?.data?.message || 'Demo login failed')
+    }
+    setLoading(false)
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
       <div className="max-w-md w-full">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-indigo-600">🎪 EventPulse</h1>
-          <p className="text-gray-500 mt-2">Discover and track events</p>
+          <div className="text-4xl mb-2">🎪</div>
+          <h1 className="text-3xl font-extrabold text-indigo-600">EventPulse</h1>
+          <p className="text-gray-500 mt-1">Discover, track, and share live events</p>
         </div>
 
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">
+        <div className="bg-white rounded-xl shadow-md border border-gray-100 p-8">
+          <h2 className="text-xl font-bold text-gray-900 mb-5">
             {isRegister ? 'Create Account' : 'Welcome Back'}
           </h2>
 
@@ -68,7 +91,7 @@ export default function LoginPage() {
                   value={name}
                   onChange={e => setName(e.target.value)}
                   placeholder="Your name"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-3.5 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
                 />
               </div>
             )}
@@ -80,7 +103,7 @@ export default function LoginPage() {
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 placeholder="you@example.com"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-3.5 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
               />
             </div>
 
@@ -91,23 +114,37 @@ export default function LoginPage() {
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full px-3.5 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
               />
             </div>
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 font-medium transition-colors"
+              className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg text-sm transition-colors shadow-sm disabled:opacity-50"
             >
               {loading ? 'Please wait...' : isRegister ? 'Create Account' : 'Sign In'}
             </button>
           </form>
 
-          <div className="mt-4 text-center">
+          {!isRegister && (
+            <div className="mt-4 pt-4 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={handleDemoSignIn}
+                disabled={loading}
+                className="w-full py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-medium rounded-lg text-sm transition-colors border border-indigo-200 flex items-center justify-center gap-2"
+              >
+                <span>⚡</span>
+                <span>1-Click Sign In as Demo User</span>
+              </button>
+            </div>
+          )}
+
+          <div className="mt-5 text-center">
             <button
               onClick={() => { setIsRegister(!isRegister); setError('') }}
-              className="text-sm text-indigo-600 hover:underline"
+              className="text-sm font-medium text-indigo-600 hover:text-indigo-800"
             >
               {isRegister ? 'Already have an account? Sign In' : "Don't have an account? Register"}
             </button>
